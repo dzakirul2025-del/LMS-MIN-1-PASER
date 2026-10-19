@@ -1,0 +1,6 @@
+{
+  "name": "LMS MIN 1 Paser",
+  "description": "Sistem Manajemen Pembelajaran Digital Terpadu Madrasah Ibtidaiyah Kelas VI MIN 1 Paser - Dzakirul Husni, S.Pd.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
