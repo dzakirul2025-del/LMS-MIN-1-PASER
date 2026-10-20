@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ActivityLog, ImportHistory } from '../types';
 import { Layers, FileSpreadsheet, History, CheckCircle2, XCircle } from 'lucide-react';
+import { safeApiFetch } from '../lib/api';
 
 export const LogsView: React.FC = () => {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
@@ -10,14 +11,14 @@ export const LogsView: React.FC = () => {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/admin/logs').then((r) => r.json()),
-      fetch('/api/admin/import-history').then((r) => r.json()),
+      safeApiFetch('/api/admin/logs'),
+      safeApiFetch('/api/admin/import-history'),
     ])
       .then(([logsData, historyData]) => {
-        if (logsData.success) setLogs(logsData.logs);
-        if (historyData.success) setImportHistories(historyData.histories);
+        if (logsData && logsData.success && Array.isArray(logsData.logs)) setLogs(logsData.logs);
+        if (historyData && historyData.success && Array.isArray(historyData.histories)) setImportHistories(historyData.histories);
       })
-      .catch((e) => console.error(e))
+      .catch((e) => console.warn(e))
       .finally(() => setIsLoading(false));
   }, []);
 

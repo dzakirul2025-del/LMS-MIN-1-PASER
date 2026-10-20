@@ -12,6 +12,7 @@ import {
   FileCode,
   Sparkles,
 } from 'lucide-react';
+import { safeApiFetch } from '../lib/api';
 
 interface GoogleIntegrationModalProps {
   dbStatus: DatabaseStatus | null;
@@ -34,9 +35,8 @@ export const GoogleIntegrationModal: React.FC<GoogleIntegrationModalProps> = ({ 
     setIsTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch('/api/admin/database-status');
-      const data = await res.json();
-      if (data.isConfigured) {
+      const data = await safeApiFetch('/api/admin/database-status');
+      if (data && data.isConfigured) {
         setTestResult('Koneksi Google Apps Script terverifikasi aktif dan tersambung!');
       } else {
         setTestResult(
@@ -44,7 +44,7 @@ export const GoogleIntegrationModal: React.FC<GoogleIntegrationModalProps> = ({ 
         );
       }
     } catch (e: any) {
-      setTestResult('Gagal menghubungi backend: ' + e.message);
+      setTestResult('Gagal menghubungi backend: ' + (e.message || 'Error'));
     } finally {
       setIsTesting(false);
     }

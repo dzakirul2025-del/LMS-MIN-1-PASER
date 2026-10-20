@@ -11,6 +11,7 @@ import {
   X,
   Sparkles,
 } from 'lucide-react';
+import { safeApiFetch } from '../lib/api';
 
 interface AssignmentsViewProps {
   user: UserSession;
@@ -24,12 +25,13 @@ export const AssignmentsView: React.FC<AssignmentsViewProps> = ({ user }) => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/assignments')
-      .then((res) => res.json())
+    safeApiFetch('/api/assignments')
       .then((data) => {
-        if (data.success) setAssignments(data.assignments);
+        if (data && data.success && Array.isArray(data.assignments)) {
+          setAssignments(data.assignments);
+        }
       })
-      .catch((err) => console.error(err));
+      .catch((err) => console.warn(err));
   }, []);
 
   const handleSubmitAssignment = (e: React.FormEvent) => {

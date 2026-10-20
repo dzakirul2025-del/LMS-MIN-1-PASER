@@ -13,6 +13,8 @@ import { CbtSimulationModal } from './components/CbtSimulationModal';
 import { LogsView } from './components/LogsView';
 import { Loader2 } from 'lucide-react';
 
+import { safeApiFetch, getStoredUser, setStoredSession, clearStoredSession } from './lib/api';
+
 export function App() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -21,17 +23,22 @@ export function App() {
 
   // Check existing session on load
   const checkSession = async () => {
+    const cachedUser = getStoredUser();
+    if (cachedUser) {
+      setUser(cachedUser);
+    }
+
     try {
-      const res = await fetch('/api/auth/me');
-      const data = await res.json();
-      if (res.ok && data.success && data.user) {
+      const data = await safeApiFetch('/api/auth/me');
+      if (data && data.success && data.user) {
         setUser(data.user);
-      } else {
+        setStoredSession(undefined, data.user);
+      } else if (!cachedUser) {
         setUser(null);
       }
     } catch (e) {
       console.warn('Sesi belum terdeteksi:', e);
-      setUser(null);
+      if (!cachedUser) setUser(null);
     } finally {
       setIsInitializing(false);
     }
@@ -39,9 +46,8 @@ export function App() {
 
   const fetchDbStatus = async () => {
     try {
-      const res = await fetch('/api/admin/database-status');
-      if (res.ok) {
-        const data = await res.json();
+      const data = await safeApiFetch('/api/admin/database-status');
+      if (data && data.isConfigured !== undefined) {
         setDbStatus(data);
       }
     } catch (e) {
@@ -66,10 +72,11 @@ export function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await safeApiFetch('/api/auth/logout', { method: 'POST' });
     } catch (e) {
       console.error('Logout error:', e);
     }
+    clearStoredSession();
     setUser(null);
     setActiveTab('dashboard');
   };

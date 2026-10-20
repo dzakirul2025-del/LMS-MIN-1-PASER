@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Bookmark,
 } from 'lucide-react';
+import { safeApiFetch } from '../lib/api';
 
 export const LearningMaterialsView: React.FC = () => {
   const [materials, setMaterials] = useState<LearningMaterial[]>([]);
@@ -23,17 +24,19 @@ export const LearningMaterialsView: React.FC = () => {
   useEffect(() => {
     const fetchMaterials = async () => {
       try {
-        const [matRes, subRes] = await Promise.all([
-          fetch('/api/materials'),
-          fetch('/api/subjects'),
+        const [matData, subData] = await Promise.all([
+          safeApiFetch('/api/materials'),
+          safeApiFetch('/api/subjects'),
         ]);
-        const matData = await matRes.json();
-        const subData = await subRes.json();
 
-        if (matData.success) setMaterials(matData.materials);
-        if (subData.success) setSubjects(subData.subjects);
+        if (matData && matData.success && Array.isArray(matData.materials)) {
+          setMaterials(matData.materials);
+        }
+        if (subData && subData.success && Array.isArray(subData.subjects)) {
+          setSubjects(subData.subjects);
+        }
       } catch (e) {
-        console.error('Gagal mengambil data materi:', e);
+        console.warn('Gagal mengambil data materi:', e);
       } finally {
         setIsLoading(false);
       }

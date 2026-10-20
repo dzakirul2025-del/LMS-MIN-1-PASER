@@ -113,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-emerald-100 hover:bg-emerald-800/60'
               }`}
             >
-              Manajemen Siswa & Impor Excel
+              Pengaturan Kelas 6 & Siswa
             </button>
             <button
               onClick={() => setActiveTab('materials')}

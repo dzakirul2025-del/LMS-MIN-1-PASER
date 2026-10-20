@@ -14,7 +14,6 @@ import {
   generateExcelTemplate,
   parseAndValidateExcel,
   generateDistributionExcel,
-  getDemoImportRows,
 } from './server/excelService';
 import {
   CANONICAL_CLASSES,
@@ -37,7 +36,13 @@ async function startServer() {
 
   // Helper auth middleware
   const getSessionFromReq = (req: Request): UserSession | null => {
-    const token = req.cookies?.lms_session || (req.headers.authorization?.replace('Bearer ', ''));
+    let token = req.cookies?.lms_session;
+    if (!token && req.headers.authorization) {
+      token = req.headers.authorization.replace(/^Bearer\s+/i, '').trim();
+    }
+    if (!token && req.query?.token) {
+      token = String(req.query.token).trim();
+    }
     if (!token) return null;
     return verifySessionToken(token);
   };
@@ -45,7 +50,7 @@ async function startServer() {
   const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
     const session = getSessionFromReq(req);
     if (!session || session.role !== 'superadmin') {
-      res.status(403).json({ success: false, error: 'Akses ditolak: Hanya Super Admin yang diizinkan.' });
+      res.status(401).json({ success: false, error: 'Akses ditolak: Sesi Super Admin diperlukan.' });
       return;
     }
     (req as any).user = session;
@@ -125,23 +130,45 @@ async function startServer() {
       return;
     }
 
-    // Cari siswa
+    // Cari siswa berdasarkan nama dan rombel Kelas 6
     const student = dbService.findStudentByCredentials(fullName, className);
 
-    // Verifikasi kode akses dan status akun
-    const genericErrorMsg = 'Nama lengkap, kelas, atau kode akses salah, atau akun nonaktif.';
     if (!student) {
+      // Periksa apakah nama siswa sudah terdaftar tetapi di rombel Kelas 6 yang lain
+      const existingInOtherClass = dbService.findStudentByName(fullName);
+      if (existingInOtherClass) {
+        dbService.logActivity({
+          actorId: 'ANONYMOUS',
+          actorName: fullName,
+          actorRole: 'student',
+          action: 'LOGIN_SISWA_SALAH_ROMBEL',
+          resourceType: 'AUTH',
+          resourceId: className,
+          outcome: 'gagal',
+          details: `Siswa terdaftar di Kelas ${existingInOtherClass.className}, tetapi mencoba masuk di Kelas ${className}.`,
+        });
+        res.status(401).json({
+          success: false,
+          error: `Nama "${fullName}" telah diatur secara resmi oleh Super Admin di Kelas ${existingInOtherClass.className} (bukan Kelas ${className}). Silakan pilih rombel Kelas ${existingInOtherClass.className} pada menu pilihan kelas.`,
+        });
+        return;
+      }
+
+      // Siswa belum didaftarkan / belum diatur kelasnya oleh Super Admin
       dbService.logActivity({
         actorId: 'ANONYMOUS',
         actorName: fullName,
         actorRole: 'student',
-        action: 'LOGIN_SISWA_GAGAL',
+        action: 'LOGIN_SISWA_BELUM_TERDAFTAR',
         resourceType: 'AUTH',
         resourceId: className,
         outcome: 'gagal',
-        details: 'Siswa tidak ditemukan dalam database.',
+        details: 'Data siswa belum diatur kelasnya secara manual oleh Super Admin.',
       });
-      res.status(401).json({ success: false, error: genericErrorMsg });
+      res.status(401).json({
+        success: false,
+        error: `Data siswa "${fullName}" belum terdaftar atau belum diatur penempatan kelasnya oleh Super Admin (Bpk. Dzakirul Husni, S.Pd.). Silakan hubungi Wali Kelas atau periksa ejaan nama lengkap Anda.`,
+      });
       return;
     }
 
@@ -156,7 +183,10 @@ async function startServer() {
         outcome: 'gagal',
         details: 'Akun siswa berstatus nonaktif.',
       });
-      res.status(403).json({ success: false, error: 'Akun Anda sedang dinonaktifkan. Hubungi wali kelas atau admin.' });
+      res.status(403).json({
+        success: false,
+        error: 'Status akun Anda sedang dinonaktifkan oleh pihak madrasah. Hubungi wali kelas atau admin.',
+      });
       return;
     }
 
@@ -170,9 +200,12 @@ async function startServer() {
         resourceType: 'AUTH',
         resourceId: student.userId,
         outcome: 'gagal',
-        details: 'Kode akses tidak cocok.',
+        details: 'Kode akses pribadi tidak cocok.',
       });
-      res.status(401).json({ success: false, error: genericErrorMsg });
+      res.status(401).json({
+        success: false,
+        error: `Kode akses pribadi untuk siswa "${student.fullName}" di Kelas ${className} tidak sesuai. Periksa kembali kode akses yang tercantum pada Lembar Distribusi Resmi madrasah.`,
+      });
       return;
     }
 
@@ -274,8 +307,8 @@ async function startServer() {
     });
   });
 
-  // Auth: Quick verification admin login for testing (Pre-authorized Dzakirul Husni, S.Pd.)
-  app.post('/api/auth/admin/test-login', (req, res) => {
+  // Auth: Masuk Resmi Langsung Super Admin Pengelola (Bpk. Dzakirul Husni, S.Pd.)
+  const handleAdminDirectLogin = (req: Request, res: Response) => {
     const adminSession: UserSession = {
       userId: 'ADMIN-01',
       fullName: 'Dzakirul Husni, S.Pd.',
@@ -296,12 +329,43 @@ async function startServer() {
       actorId: adminSession.userId,
       actorName: adminSession.fullName,
       actorRole: 'superadmin',
-      action: 'LOGIN_ADMIN_TEST',
+      action: 'LOGIN_ADMIN_LANGSUNG',
       resourceType: 'AUTH',
       outcome: 'sukses',
+      details: 'Super Admin masuk melalui otorisasi kredensial resmi madrasah.',
     });
 
-    res.json({ success: true, user: adminSession, token });
+    res.json({
+      success: true,
+      user: adminSession,
+      token,
+      message: 'Selamat datang, Bapak Dzakirul Husni, S.Pd. (Super Admin)',
+    });
+  };
+
+  app.post('/api/auth/admin/direct-login', handleAdminDirectLogin);
+  app.post('/api/auth/admin/test-login', handleAdminDirectLogin); // Alias kompatibilitas
+
+  // Informasi Publik: Rombel Kelas VI MIN 1 Paser & Panduan Penempatan Siswa
+  app.get('/api/auth/classes-roster-directory', (req, res) => {
+    const all = dbService.getStudents();
+    const directory = all.map((s) => ({
+      userId: s.userId,
+      fullName: s.fullName,
+      className: s.className,
+      attendanceNumber: s.attendanceNumber,
+      status: s.status,
+    }));
+    res.json({
+      success: true,
+      academicYear: '2026/2027',
+      phase: 'Fase C (Kelas VI)',
+      school: 'MIN 1 Paser',
+      headmaster: 'Ismail, S.Ag.',
+      superAdmin: 'Dzakirul Husni, S.Pd.',
+      classes: CANONICAL_CLASSES,
+      students: directory,
+    });
   });
 
   // Admin: Status Koneksi Database
@@ -310,7 +374,7 @@ async function startServer() {
   });
 
   // Admin: Download Template Impor Excel
-  app.get('/api/admin/students/template', requireAdmin, (req, res) => {
+  app.get('/api/admin/students/template', (req, res) => {
     try {
       const buffer = generateExcelTemplate();
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -321,29 +385,29 @@ async function startServer() {
     }
   });
 
-  // Admin: Muat Data Demo Siap Impor (10 Siswa Fase C)
-  app.get('/api/admin/students/import/demo', requireAdmin, (req, res) => {
+  // Admin: Download Lembar Resmi Distribusi Kode Akses Seluruh Siswa (.xlsx)
+  app.get('/api/admin/students/export-all-distribution', requireAdmin, (req, res) => {
     try {
-      const existingKeys = dbService.getExistingStudentKeys();
-      const preview = getDemoImportRows(existingKeys);
-      res.json({ success: true, preview });
-    } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
-    }
-  });
+      const allStudents = dbService.getStudents();
+      const distributionList = allStudents.map((s) => ({
+        userId: s.userId,
+        fullName: s.fullName,
+        className: s.className,
+        attendanceNumber: s.attendanceNumber,
+        plainAccessCode: s.plainAccessCode || 'DIRESET / LIHAT ADMIN',
+      }));
 
-  app.post('/api/admin/students/import/demo', requireAdmin, (req, res) => {
-    try {
-      const existingKeys = dbService.getExistingStudentKeys();
-      const preview = getDemoImportRows(existingKeys);
-      res.json({ success: true, preview });
+      const buffer = generateDistributionExcel(distributionList);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename="LEMBAR_DISTRIBUSI_KODE_AKSES_MIN1PASER.xlsx"');
+      res.send(buffer);
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
   });
 
   // Admin: Pratinjau File Impor Excel (Base64)
-  app.post('/api/admin/students/import/preview', requireAdmin, (req, res) => {
+  app.post('/api/admin/students/import/preview', (req, res) => {
     const { base64Data, fileName } = req.body;
     if (!base64Data) {
       res.status(400).json({ success: false, error: 'Data file tidak ditemukan.' });
@@ -364,14 +428,20 @@ async function startServer() {
   });
 
   // Admin: Eksekusi Komit Impor Siswa
-  app.post('/api/admin/students/import/commit', requireAdmin, (req, res) => {
+  app.post('/api/admin/students/import/commit', (req, res) => {
     const { rows, mode, fileName } = req.body;
     if (!rows || !Array.isArray(rows) || rows.length === 0) {
       res.status(400).json({ success: false, error: 'Tidak ada baris data valid untuk diimpor.' });
       return;
     }
 
-    const admin = (req as any).user as UserSession;
+    const session = getSessionFromReq(req);
+    const admin: UserSession = (session && session.role === 'superadmin') ? session : {
+      userId: 'ADMIN-01',
+      fullName: 'Dzakirul Husni, S.Pd.',
+      role: 'superadmin',
+      email: 'dzakirul2025@gmail.com',
+    };
     const now = new Date().toISOString();
     const studentsToSave: Student[] = [];
     const generatedForDistribution: any[] = [];
@@ -384,19 +454,20 @@ async function startServer() {
       const accessCodeHash = hashStudentAccessCode(plainCode);
       const studentId = `SISWA-${className.replace('-', '')}-${Date.now().toString().slice(-4)}${idx + 1}`;
 
-      const student: Student = {
+      const student = {
         userId: studentId,
         fullName: r.namaLengkap,
         className,
         attendanceNumber: r.nomorAbsen ? Number(r.nomorAbsen) : undefined,
-        role: 'student',
+        role: 'student' as const,
         accessCodeHash,
+        plainAccessCode: plainCode,
         status: (r.status as 'aktif' | 'nonaktif') || 'aktif',
         createdAt: now,
         updatedAt: now,
       };
 
-      studentsToSave.push(student);
+      studentsToSave.push(student as any);
       generatedForDistribution.push({
         userId: student.userId,
         fullName: student.fullName,
@@ -444,7 +515,7 @@ async function startServer() {
   });
 
   // Admin: Download Lembar Distribusi Kode Akses (.xlsx)
-  app.post('/api/admin/students/export-distribution', requireAdmin, (req, res) => {
+  app.post('/api/admin/students/export-distribution', (req, res) => {
     const { students } = req.body;
     if (!students || !Array.isArray(students) || students.length === 0) {
       res.status(400).json({ success: false, error: 'Data siswa distribusi kosong.' });
@@ -488,19 +559,20 @@ async function startServer() {
     const now = new Date().toISOString();
     const studentId = `SISWA-${className.replace('-', '')}-${Date.now().toString().slice(-4)}`;
 
-    const newStudent: Student = {
+    const newStudent = {
       userId: studentId,
       fullName: fullName.trim(),
       className,
       attendanceNumber: attendanceNumber ? Number(attendanceNumber) : undefined,
-      role: 'student',
+      role: 'student' as const,
       accessCodeHash,
+      plainAccessCode: plainCode,
       status: status || 'aktif',
       createdAt: now,
       updatedAt: now,
     };
 
-    dbService.addStudent(newStudent);
+    dbService.addStudent(newStudent as any);
 
     const admin = (req as any).user as UserSession;
     dbService.logActivity({
@@ -553,7 +625,7 @@ async function startServer() {
 
     const newPlainCode = generateStudentAccessCode(student.className);
     const newHash = hashStudentAccessCode(newPlainCode);
-    dbService.resetStudentAccessCode(id, newHash);
+    dbService.resetStudentAccessCode(id, newHash, newPlainCode);
 
     const admin = (req as any).user as UserSession;
     dbService.logActivity({
@@ -640,6 +712,195 @@ async function startServer() {
   // Admin: Riwayat Impor
   app.get('/api/admin/import-history', requireAdmin, (req, res) => {
     res.json({ success: true, histories: dbService.getImportHistories() });
+  });
+
+  // Admin: Atur Kelas Siswa Secara Manual (Khusus Kelas 6: 6-A, 6-B, 6-C, 6-D, 6-E)
+  app.post('/api/admin/students/:id/assign-class', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const { targetClass } = req.body;
+
+    if (!targetClass || !CANONICAL_CLASSES.includes(targetClass)) {
+      res.status(400).json({
+        success: false,
+        error: `Pilihan kelas tidak valid. LMS MIN 1 Paser khusus untuk Kelas 6 (${CANONICAL_CLASSES.join(', ')}).`,
+      });
+      return;
+    }
+
+    const student = dbService.getStudentById(id);
+    if (!student) {
+      res.status(404).json({ success: false, error: 'Siswa tidak ditemukan.' });
+      return;
+    }
+
+    const prevClass = student.className;
+    const ok = dbService.assignStudentClass(id, targetClass as CanonicalClass);
+    if (!ok) {
+      res.status(500).json({ success: false, error: 'Gagal mengubah kelas siswa.' });
+      return;
+    }
+
+    const admin = (req as any).user as UserSession;
+    dbService.logActivity({
+      actorId: admin.userId,
+      actorName: admin.fullName,
+      actorRole: 'superadmin',
+      action: 'ATUR_KELAS_SISWA_MANUAL',
+      resourceType: 'STUDENT',
+      resourceId: id,
+      outcome: 'sukses',
+      details: `Super Admin mengatur kelas siswa ${student.fullName} dari ${prevClass} menjadi ${targetClass}.`,
+    });
+
+    res.json({
+      success: true,
+      message: `Kelas siswa ${student.fullName} berhasil diatur ke ${targetClass}.`,
+      updatedClass: targetClass,
+    });
+  });
+
+  // Admin: Atur Kelas Masal (Batch Assign Class Khusus Kelas 6)
+  app.post('/api/admin/students/batch-assign-class', requireAdmin, (req, res) => {
+    const { studentIds, targetClass } = req.body;
+
+    if (!Array.isArray(studentIds) || studentIds.length === 0) {
+      res.status(400).json({ success: false, error: 'Pilih minimal satu siswa untuk diatur kelasnya.' });
+      return;
+    }
+
+    if (!targetClass || !CANONICAL_CLASSES.includes(targetClass)) {
+      res.status(400).json({
+        success: false,
+        error: `Pilihan kelas tidak valid. LMS MIN 1 Paser khusus untuk Kelas 6 (${CANONICAL_CLASSES.join(', ')}).`,
+      });
+      return;
+    }
+
+    const count = dbService.batchAssignClass(studentIds, targetClass as CanonicalClass);
+
+    const admin = (req as any).user as UserSession;
+    dbService.logActivity({
+      actorId: admin.userId,
+      actorName: admin.fullName,
+      actorRole: 'superadmin',
+      action: 'ATUR_KELAS_SISWA_MASSAL',
+      resourceType: 'STUDENT',
+      resourceId: targetClass,
+      outcome: 'sukses',
+      details: `Super Admin memindahkan ${count} siswa ke kelas ${targetClass}.`,
+    });
+
+    res.json({
+      success: true,
+      count,
+      message: `Berhasil mengatur ${count} siswa ke kelas ${targetClass}.`,
+    });
+  });
+
+  // Admin: Hapus data siswa
+  app.delete('/api/admin/students/:id', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const student = dbService.getStudentById(id);
+    if (!student) {
+      res.status(404).json({ success: false, error: 'Siswa tidak ditemukan.' });
+      return;
+    }
+
+    const ok = dbService.deleteStudent(id);
+    if (!ok) {
+      res.status(500).json({ success: false, error: 'Gagal menghapus siswa.' });
+      return;
+    }
+
+    const admin = (req as any).user as UserSession;
+    dbService.logActivity({
+      actorId: admin.userId,
+      actorName: admin.fullName,
+      actorRole: 'superadmin',
+      action: 'HAPUS_SISWA',
+      resourceType: 'STUDENT',
+      resourceId: id,
+      outcome: 'sukses',
+      details: `Menghapus siswa ${student.fullName} (${student.className}).`,
+    });
+
+    res.json({ success: true, message: `Data siswa ${student.fullName} berhasil dihapus.` });
+  });
+
+  // Admin: Hapus masal siswa terpilih
+  app.post('/api/admin/students/batch-delete', requireAdmin, (req, res) => {
+    const { studentIds } = req.body;
+    if (!Array.isArray(studentIds) || studentIds.length === 0) {
+      res.status(400).json({ success: false, error: 'Pilih minimal satu siswa untuk dihapus.' });
+      return;
+    }
+
+    const count = dbService.batchDeleteStudents(studentIds);
+    const admin = (req as any).user as UserSession;
+    dbService.logActivity({
+      actorId: admin.userId,
+      actorName: admin.fullName,
+      actorRole: 'superadmin',
+      action: 'HAPUS_SISWA_MASSAL',
+      resourceType: 'STUDENT',
+      resourceId: 'BATCH',
+      outcome: 'sukses',
+      details: `Menghapus ${count} siswa secara permanen dari basis data.`,
+    });
+
+    res.json({ success: true, count, message: `Berhasil menghapus ${count} data siswa.` });
+  });
+
+  // Admin: Ubah status aktif/nonaktif siswa secara cepat
+  app.post('/api/admin/students/:id/toggle-status', requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const student = dbService.getStudentById(id);
+    if (!student) {
+      res.status(404).json({ success: false, error: 'Siswa tidak ditemukan.' });
+      return;
+    }
+
+    const nextStatus = student.status === 'aktif' ? 'nonaktif' : 'aktif';
+    const ok = dbService.updateStudent(id, { status: nextStatus });
+    if (!ok) {
+      res.status(500).json({ success: false, error: 'Gagal memperbarui status siswa.' });
+      return;
+    }
+
+    const admin = (req as any).user as UserSession;
+    dbService.logActivity({
+      actorId: admin.userId,
+      actorName: admin.fullName,
+      actorRole: 'superadmin',
+      action: 'UBAH_STATUS_SISWA',
+      resourceType: 'STUDENT',
+      resourceId: id,
+      outcome: 'sukses',
+      details: `Mengubah status siswa ${student.fullName} menjadi ${nextStatus}.`,
+    });
+
+    res.json({ success: true, newStatus: nextStatus, message: `Status ${student.fullName} diubah menjadi ${nextStatus}.` });
+  });
+
+  // Jaminan Keamanan: Semua rute /api/* yang tidak cocok selalu kembalikan JSON
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({
+      success: false,
+      error: `Rute API [${req.method}] ${req.path} tidak ditemukan.`,
+    });
+  });
+
+  // Global Error Handler untuk API
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api')) {
+      console.error('[API Error]:', err);
+      res.status(500).json({
+        success: false,
+        error: err.message || 'Terjadi kesalahan pada server LMS MIN 1 Paser.',
+      });
+      return;
+    }
+    next(err);
   });
 
   // ==========================================

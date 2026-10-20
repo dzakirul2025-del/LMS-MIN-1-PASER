@@ -2,6 +2,18 @@ export type CanonicalClass = '6-A' | '6-B' | '6-C' | '6-D' | '6-E';
 
 export const CANONICAL_CLASSES: CanonicalClass[] = ['6-A', '6-B', '6-C', '6-D', '6-E'];
 
+export interface ClassConfig {
+  classCode: CanonicalClass;
+  className: string;
+  gradeLevel: '6'; // Khusus Kelas 6 Saja
+  isActive: boolean; // Diatur manual oleh Super Admin
+  waliKelas: string;
+  roomName?: string;
+  notes?: string;
+  studentCount?: number;
+  updatedAt?: string;
+}
+
 export type UserRole = 'student' | 'superadmin';
 
 export interface UserSession {
@@ -20,6 +32,7 @@ export interface Student {
   attendanceNumber?: number;
   role: 'student';
   accessCodeHash: string;
+  plainAccessCode?: string;
   status: 'aktif' | 'nonaktif';
   createdAt: string;
   updatedAt: string;

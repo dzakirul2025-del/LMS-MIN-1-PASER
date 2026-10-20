@@ -27,7 +27,7 @@ interface CbtQuestion {
   explanation: string;
 }
 
-const SAMPLE_QUESTIONS: CbtQuestion[] = [
+const OFFICIAL_CBT_QUESTIONS: CbtQuestion[] = [
   {
     id: 1,
     subject: 'Matematika',
@@ -52,7 +52,7 @@ const SAMPLE_QUESTIONS: CbtQuestion[] = [
       { key: 'D', text: 'Mengurangi populasi ikan dan kepiting bakau' },
     ],
     correctAnswer: 'B',
-    explanation: 'Akar mangrove mengikat lumpur dan memecah ombak sehingga efektif mencegah abrasi serta menjadi habitat biota laut.',
+    explanation: 'Akar mangrove mengikat lumpur dan memecah ombak sehingga efektif mencegah abrasi serta menjadi habitat pemijahan biota laut.',
   },
   {
     id: 3,
@@ -78,7 +78,7 @@ const SAMPLE_QUESTIONS: CbtQuestion[] = [
       { key: 'D', text: 'Puisi' },
     ],
     correctAnswer: 'A',
-    explanation: 'Teks eksplanasi bertujuan menjelaskan kausalitas proses terjadinya fenomena alam atau sosial.',
+    explanation: 'Teks eksplanasi bertujuan menjelaskan hubungan sebab-akibat (kausalitas) terjadinya fenomena alam atau fenomena sosial.',
   },
   {
     id: 5,
@@ -88,10 +88,75 @@ const SAMPLE_QUESTIONS: CbtQuestion[] = [
       { key: 'A', text: 'Pertama (Ketuhanan Yang Maha Esa)' },
       { key: 'B', text: 'Kedua (Kemanusiaan yang Adil dan Beradab)' },
       { key: 'C', text: 'Ketiga (Persatuan Indonesia)' },
-      { key: 'D', text: 'Kelima (Keadilan Sosial)' },
+      { key: 'D', text: 'Kelima (Keadilan Sosial Bagi Seluruh Rakyat Indonesia)' },
     ],
     correctAnswer: 'A',
-    explanation: 'Sila pertama menekankan kebebasan beragama dan toleransi antarumat beragama.',
+    explanation: 'Sila pertama menekankan kebebasan memeluk agama dan sikap toleransi antarsesama umat beragama.',
+  },
+  {
+    id: 6,
+    subject: 'Al-Qur\'an Hadis',
+    question: 'Salah satu pesan akhlak utama yang ditekankan dalam kandungan QS. Ad-Duha ayat 9-10 adalah...',
+    options: [
+      { key: 'A', text: 'Menimbun harta kekayaan untuk diri sendiri' },
+      { key: 'B', text: 'Larangan bersikap sewenang-wenang terhadap anak yatim dan jangan menghardik peminta-minta' },
+      { key: 'C', text: 'Mengabaikan kebersihan madrasah' },
+      { key: 'D', text: 'Mendahulukan kepentingan pribadi di atas jamaah' },
+    ],
+    correctAnswer: 'B',
+    explanation: 'QS. Ad-Duha ayat 9-10 berbunyi "Fa ammal-yatiima fala taqhar, wa ammas-saa\'ila fala tanhar" yang memerintahkan memuliakan anak yatim dan tidak menghardik orang yang membutuhkan.',
+  },
+  {
+    id: 7,
+    subject: 'Akidah Akhlak',
+    question: 'Lafaz kalimat thayyibah "Laa haula wa laa quwwata illaa billaahil \'aliyyil \'azhiim" disebut juga dengan...',
+    options: [
+      { key: 'A', text: 'Hauqalah' },
+      { key: 'B', text: 'Istighfar' },
+      { key: 'C', text: 'Tahmid' },
+      { key: 'D', text: 'Takbir' },
+    ],
+    correctAnswer: 'A',
+    explanation: 'Kalimah Hauqalah bermakna tiada daya dan tiada kekuatan melainkan dengan pertolongan Allah Yang Maha Tinggi lagi Maha Agung.',
+  },
+  {
+    id: 8,
+    subject: 'Sejarah Kebudayaan Islam',
+    question: 'Metode dakwah Wali Sanga di Nusantara dikenal sangat bijaksana karena...',
+    options: [
+      { key: 'A', text: 'Memaksakan kehendak dengan kekerasan senjata' },
+      { key: 'B', text: 'Menggunakan pendekatan budaya, seni gamelan, dan wayang yang disisipi nilai-nilai tauhid' },
+      { key: 'C', text: 'Mengisolasi diri dari masyarakat pribumi' },
+      { key: 'D', text: 'Menghapus seluruh adat istiadat secara mendadak' },
+    ],
+    correctAnswer: 'B',
+    explanation: 'Wali Sanga berdakwah secara damai (mau\'izhah hasanah) dengan mengakulturasi budaya dan kearifan lokal.',
+  },
+  {
+    id: 9,
+    subject: 'Bahasa Arab',
+    question: 'Arti dari kata Bahasa Arab "الْمَدْرَسَةُ" (Al-Madrasatu) dan "الْفَصْلُ" (Al-Fashlu) berturut-turut adalah...',
+    options: [
+      { key: 'A', text: 'Rumah dan Kamar' },
+      { key: 'B', text: 'Madrasah / Sekolah dan Kelas' },
+      { key: 'C', text: 'Pasar dan Toko' },
+      { key: 'D', text: 'Masjid dan Menara' },
+    ],
+    correctAnswer: 'B',
+    explanation: 'Al-Madrasah bermakna sekolah/madrasah dan Al-Fashl bermakna ruang kelas belajar.',
+  },
+  {
+    id: 10,
+    subject: 'Muatan Lokal Budaya Paser',
+    question: 'Semboyan resmi Kabupaten Paser "Olo Manin Aso Buen Si Olo Ndo" memiliki makna luhur...',
+    options: [
+      { key: 'A', text: 'Hari Esok Harus Lebih Baik daripada Hari Ini' },
+      { key: 'B', text: 'Bersatu Kita Teguh Bercerai Kita Runtuh' },
+      { key: 'C', text: 'Tanah yang Subur dan Makmur' },
+      { key: 'D', text: 'Pantang Mundur Sebelum Berhasil' },
+    ],
+    correctAnswer: 'A',
+    explanation: 'Semboyan Paser "Olo Manin Aso Buen Si Olo Ndo" mengajarkan semangat perbaikan diri berkelanjutan: hari esok harus lebih baik daripada hari ini.',
   },
 ];
 

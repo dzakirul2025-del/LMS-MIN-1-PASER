@@ -47,20 +47,52 @@ export function generateExcelTemplate(): Buffer {
 }
 
 /**
- * Hasilkan data demo siap impor untuk 5 kelas (6-A s/d 6-E)
+ * Buat berkas Excel demo siap pakai DEMO_DATA_SISWA_KELAS_6_MIN1PASER.xlsx
+ */
+export function generateDemoExcelFile(): Buffer {
+  const wb = XLSX.utils.book_new();
+
+  const data: any[][] = [
+    ['nama_lengkap', 'kelas', 'nomor_absen', 'status'],
+    ['Muhammad Fauzan Azhima', '6-A', 2, 'aktif'],
+    ['Nur Halimah Syabaniyah', '6-A', 3, 'aktif'],
+    ['Zaidan Athallah Putra', '6-B', 2, 'aktif'],
+    ['Rayyan Al-Ghifari', '6-B', 3, 'aktif'],
+    ['Annisa Shaliha Zahirah', '6-C', 2, 'aktif'],
+    ['Hafiz Al-Baqir Paser', '6-C', 3, 'aktif'],
+    ['Syifa Nur Fadhilah', '6-D', 2, 'aktif'],
+    ['Ibrahim Maulana Akbar', '6-D', 3, 'aktif'],
+    ['Kayla Azzahra Humaira', '6-E', 2, 'aktif'],
+    ['Fajar Siddiq Al-Mansyur', '6-E', 3, 'aktif'],
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [
+    { wch: 30 },
+    { wch: 12 },
+    { wch: 15 },
+    { wch: 12 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'DATA_SISWA_DEMO');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+/**
+ * Hasilkan data demo siap impor untuk 5 kelas (6-A s/d 6-E).
+ * Selalu memastikan 10 baris valid dengan memberikan varian nama jika nama demo sudah ada sebelumnya.
  */
 export function getDemoImportRows(existingStudentNames: Set<string>): ImportPreviewResult {
-  const demoList = [
-    { namaLengkap: 'Muhammad Fauzan Azhima', kelas: '6-A', nomorAbsen: 2, status: 'aktif' },
-    { namaLengkap: 'Nur Halimah Syabaniyah', kelas: '6-A', nomorAbsen: 3, status: 'aktif' },
-    { namaLengkap: 'Zaidan Athallah Putra', kelas: '6-B', nomorAbsen: 2, status: 'aktif' },
-    { namaLengkap: 'Rayyan Al-Ghifari', kelas: '6-B', nomorAbsen: 3, status: 'aktif' },
-    { namaLengkap: 'Annisa Shaliha Zahirah', kelas: '6-C', nomorAbsen: 2, status: 'aktif' },
-    { namaLengkap: 'Hafiz Al-Baqir Paser', kelas: '6-C', nomorAbsen: 3, status: 'aktif' },
-    { namaLengkap: 'Syifa Nur Fadhilah', kelas: '6-D', nomorAbsen: 2, status: 'aktif' },
-    { namaLengkap: 'Ibrahim Maulana Akbar', kelas: '6-D', nomorAbsen: 3, status: 'aktif' },
-    { namaLengkap: 'Kayla Azzahra Humaira', kelas: '6-E', nomorAbsen: 2, status: 'aktif' },
-    { namaLengkap: 'Fajar Siddiq Al-Mansyur', kelas: '6-E', nomorAbsen: 3, status: 'aktif' },
+  const baseDemoList = [
+    { namaLengkap: 'Muhammad Fauzan Azhima', kelas: '6-A' as CanonicalClass, nomorAbsen: 2, status: 'aktif' },
+    { namaLengkap: 'Nur Halimah Syabaniyah', kelas: '6-A' as CanonicalClass, nomorAbsen: 3, status: 'aktif' },
+    { namaLengkap: 'Zaidan Athallah Putra', kelas: '6-B' as CanonicalClass, nomorAbsen: 2, status: 'aktif' },
+    { namaLengkap: 'Rayyan Al-Ghifari', kelas: '6-B' as CanonicalClass, nomorAbsen: 3, status: 'aktif' },
+    { namaLengkap: 'Annisa Shaliha Zahirah', kelas: '6-C' as CanonicalClass, nomorAbsen: 2, status: 'aktif' },
+    { namaLengkap: 'Hafiz Al-Baqir Paser', kelas: '6-C' as CanonicalClass, nomorAbsen: 3, status: 'aktif' },
+    { namaLengkap: 'Syifa Nur Fadhilah', kelas: '6-D' as CanonicalClass, nomorAbsen: 2, status: 'aktif' },
+    { namaLengkap: 'Ibrahim Maulana Akbar', kelas: '6-D' as CanonicalClass, nomorAbsen: 3, status: 'aktif' },
+    { namaLengkap: 'Kayla Azzahra Humaira', kelas: '6-E' as CanonicalClass, nomorAbsen: 2, status: 'aktif' },
+    { namaLengkap: 'Fajar Siddiq Al-Mansyur', kelas: '6-E' as CanonicalClass, nomorAbsen: 3, status: 'aktif' },
   ];
 
   const rows: ExcelImportRow[] = [];
@@ -69,41 +101,39 @@ export function getDemoImportRows(existingStudentNames: Set<string>): ImportPrev
   let invalidCount = 0;
   let duplicateCount = 0;
 
-  demoList.forEach((item, idx) => {
+  baseDemoList.forEach((item, idx) => {
     const rowNumber = idx + 2;
     const errors: string[] = [];
-    const uniqueKey = `${item.namaLengkap.toLowerCase()}::${item.kelas}`;
 
-    let isDuplicate = false;
-    if (seenInFile.has(uniqueKey) || existingStudentNames.has(uniqueKey)) {
-      isDuplicate = true;
-      errors.push('Siswa dengan nama dan kelas ini sudah terdaftar di sistem');
-      duplicateCount++;
+    // Jika nama sudah ada di database, buat varian unik agar demo selalu bisa diimpor
+    let adjustedName = item.namaLengkap;
+    let uniqueKey = `${adjustedName.toLowerCase()}::${item.kelas}`;
+    let suffixCount = 2;
+
+    while (seenInFile.has(uniqueKey) || existingStudentNames.has(uniqueKey)) {
+      adjustedName = `${item.namaLengkap} (${suffixCount})`;
+      uniqueKey = `${adjustedName.toLowerCase()}::${item.kelas}`;
+      suffixCount++;
     }
+
     seenInFile.add(uniqueKey);
-
-    const isValid = errors.length === 0;
-    if (isValid) {
-      validCount++;
-    } else {
-      invalidCount++;
-    }
+    validCount++;
 
     rows.push({
       rowNumber,
-      namaLengkap: item.namaLengkap,
+      namaLengkap: adjustedName,
       kelas: item.kelas,
-      nomorAbsen: item.nomorAbsen,
+      nomorAbsen: item.nomorAbsen + (suffixCount > 2 ? suffixCount - 1 : 0),
       status: item.status,
-      isValid,
-      errors,
-      isDuplicate,
+      isValid: true,
+      errors: [],
+      isDuplicate: false,
     });
   });
 
   return {
     fileName: 'DEMO_DATA_SISWA_KELAS_6_MIN1PASER.xlsx',
-    totalRows: demoList.length,
+    totalRows: baseDemoList.length,
     validRows: validCount,
     invalidRows: invalidCount,
     duplicateRows: duplicateCount,

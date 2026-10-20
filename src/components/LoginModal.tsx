@@ -12,6 +12,7 @@ import {
   Sparkles,
   ArrowRight,
 } from 'lucide-react';
+import { safeApiFetch, setStoredSession } from '../lib/api';
 
 interface LoginModalProps {
   onSuccess: (user: UserSession) => void;
@@ -52,22 +53,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
 
     setIsLoading(true);
     try {
-      const res = await fetch('/api/auth/student/login', {
+      const data = await safeApiFetch('/api/auth/student/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fullName: studentName.trim(),
           className: studentClass,
           accessCode: accessCode.trim(),
         }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'Nama lengkap, kelas, atau kode akses tidak sesuai atau akun nonaktif.');
       }
+      setStoredSession(data.token, data.user);
       onSuccess(data.user);
     } catch (err: any) {
-      setErrorMessage(err.message);
+      setErrorMessage(err.message || 'Gagal masuk ke pembelajaran.');
     } finally {
       setIsLoading(false);
     }
@@ -77,21 +77,20 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
     setErrorMessage(null);
     setIsLoading(true);
     try {
-      const res = await fetch('/api/auth/admin/google', {
+      const data = await safeApiFetch('/api/auth/admin/google', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: adminEmail.trim(),
           fullName: 'Dzakirul Husni, S.Pd.',
         }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'Akses ditolak untuk email ini.');
       }
+      setStoredSession(data.token, data.user);
       onSuccess(data.user);
     } catch (err: any) {
-      setErrorMessage(err.message);
+      setErrorMessage(err.message || 'Gagal masuk sebagai Super Admin.');
     } finally {
       setIsLoading(false);
     }
@@ -101,17 +100,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
     setErrorMessage(null);
     setIsLoading(true);
     try {
-      const res = await fetch('/api/auth/admin/test-login', {
+      const data = await safeApiFetch('/api/auth/admin/test-login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'Gagal login Super Admin.');
       }
+      setStoredSession(data.token, data.user);
       onSuccess(data.user);
     } catch (err: any) {
-      setErrorMessage(err.message);
+      setErrorMessage(err.message || 'Gagal login Super Admin.');
     } finally {
       setIsLoading(false);
     }
@@ -184,6 +182,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
           {/* TAB 1: FORM LOGIN SISWA */}
           {activeTab === 'student' && (
             <form onSubmit={handleStudentSubmit} className="space-y-4">
+              {/* Petunjuk Penggunaan Khusus Kelas 6 */}
+              <div className="p-3.5 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 leading-relaxed flex items-start space-x-2.5">
+                <ShieldCheck className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-amber-950">Pengumuman Siswa Kelas 6:</div>
+                  <p className="mt-0.5">
+                    Siswa hanya dapat masuk ke LMS setelah kelasnya (6-A s/d 6-E) diatur secara manual oleh Super Admin (Bpk. Dzakirul Husni, S.Pd.). Pastikan nama dan kelas yang Anda pilih sesuai dengan data pembagian kelas yang telah ditetapkan madrasah.
+                  </p>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
                   Nama Lengkap Siswa
@@ -202,12 +211,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
 
               <div>
                 <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                  Pilihan Kelas (Fase C)
+                  Pilihan Kelas (Khusus Kelas 6 Fase C)
                 </label>
                 <select
                   value={studentClass}
                   onChange={(e) => setStudentClass(e.target.value as CanonicalClass)}
-                  className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-sm focus:ring-2 focus:ring-[#116B3A] focus:border-[#116B3A] outline-none transition"
+                  className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-sm focus:ring-2 focus:ring-[#116B3A] focus:border-[#116B3A] outline-none transition font-semibold"
                 >
                   {CANONICAL_CLASSES.map((cls) => (
                     <option key={cls} value={cls}>
@@ -215,6 +224,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
                     </option>
                   ))}
                 </select>
+                <p className="text-[11px] text-neutral-400 mt-1">
+                  Pilihan kelas dibatasi khusus Kelas 6 (6-A, 6-B, 6-C, 6-D, 6-E).
+                </p>
               </div>
 
               <div>
@@ -239,7 +251,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
                   </button>
                 </div>
                 <p className="text-[11px] text-neutral-500 mt-1">
-                  Kode akses dibagikan oleh wali kelas masing-masing. Terlindungi enkripsi HMAC-SHA-256.
+                  Kode akses dibagikan oleh guru/wali kelas masing-masing. Terlindungi enkripsi HMAC-SHA-256.
                 </p>
               </div>
 
@@ -249,7 +261,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
                 className="w-full bg-[#116B3A] hover:bg-[#16834A] active:bg-emerald-800 text-white font-bold py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center space-x-2 text-sm mt-2 disabled:opacity-50"
               >
                 {isLoading ? (
-                  <span>Memverifikasi...</span>
+                  <span>Memverifikasi Data Siswa...</span>
                 ) : (
                   <>
                     <span>Masuk ke Pembelajaran</span>
@@ -258,14 +270,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
                 )}
               </button>
 
-              {/* DEMO HELPER BOX FOR INSTANT TESTING */}
+              {/* DEMO HELPER BOX FOR INSTANT TESTING ALL 5 CLASSES */}
               <div className="mt-6 pt-5 border-t border-neutral-200">
                 <div className="flex items-center space-x-1.5 text-xs font-bold text-[#116B3A] mb-2">
                   <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>Akun Uji Coba Cepat (Tersedia 5 Kelas):</span>
+                  <span>Akun Uji Coba Cepat Siswa (Tersedia Lengkap 5 Kelas 6):</span>
                 </div>
                 <p className="text-[11px] text-neutral-500 mb-2">
-                  Klik salah satu siswa di bawah untuk otomatis mengisi form:
+                  Klik salah satu akun siswa di bawah untuk otomatis mengisi form:
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   <button
@@ -294,8 +306,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onSuccess }) => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => fillStudentDemo('Dimas Arya Pratama', '6-E', 'PAS-6E-1234')}
+                    onClick={() => fillStudentDemo('Nurul Hidayah', '6-D', 'PAS-6D-1234')}
                     className="text-left p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition"
+                  >
+                    <div className="font-semibold text-neutral-800">Nurul Hidayah</div>
+                    <div className="text-[11px] text-emerald-700">Kelas 6-D • PAS-6D-1234</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fillStudentDemo('Dimas Arya Pratama', '6-E', 'PAS-6E-1234')}
+                    className="text-left p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition sm:col-span-2"
                   >
                     <div className="font-semibold text-neutral-800">Dimas Arya Pratama</div>
                     <div className="text-[11px] text-emerald-700">Kelas 6-E • PAS-6E-1234</div>

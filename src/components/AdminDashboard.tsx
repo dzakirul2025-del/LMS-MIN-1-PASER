@@ -15,6 +15,7 @@ import {
   Calendar,
   Layers,
 } from 'lucide-react';
+import { safeApiFetch } from '../lib/api';
 
 interface AdminDashboardProps {
   onNavigateTab: (tab: string) => void;
@@ -29,21 +30,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateTab })
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [dashRes, statusRes, logsRes] = await Promise.all([
-          fetch('/api/dashboard'),
-          fetch('/api/admin/database-status'),
-          fetch('/api/admin/logs'),
+        const [dashJson, statusJson, logsJson] = await Promise.all([
+          safeApiFetch('/api/dashboard'),
+          safeApiFetch('/api/admin/database-status'),
+          safeApiFetch('/api/admin/logs'),
         ]);
 
-        const dashJson = await dashRes.json();
-        const statusJson = await statusRes.json();
-        const logsJson = await logsRes.json();
-
-        if (dashJson.success) setDashboardData(dashJson);
-        setDbStatus(statusJson);
-        if (logsJson.success) setLogs(logsJson.logs);
+        if (dashJson && dashJson.success) setDashboardData(dashJson);
+        if (statusJson && statusJson.isConfigured !== undefined) setDbStatus(statusJson);
+        if (logsJson && logsJson.success && Array.isArray(logsJson.logs)) setLogs(logsJson.logs);
       } catch (err) {
-        console.error('Gagal mengambil data dashboard:', err);
+        console.warn('Gagal mengambil data dashboard:', err);
       } finally {
         setIsLoading(false);
       }
@@ -85,7 +82,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateTab })
               className="bg-white text-[#116B3A] hover:bg-emerald-50 font-bold px-4 py-2 rounded-xl text-xs sm:text-sm shadow-md transition flex items-center space-x-2"
             >
               <Users className="w-4 h-4" />
-              <span>Kelola Siswa & Impor Excel</span>
+              <span>Atur Kelas 6 & Siswa</span>
             </button>
             <button
               onClick={() => onNavigateTab('google')}
@@ -180,15 +177,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigateTab })
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Distribusi Kelas VI (2 Kolom) */}
         <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-neutral-200">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-2">
               <BarChart3 className="w-5 h-5 text-[#116B3A]" />
               <h3 className="font-bold text-base text-neutral-900">
-                Distribusi Siswa per Kelas (Fase C)
+                Penataan & Distribusi Siswa Khusus Kelas 6 (Fase C)
               </h3>
             </div>
-            <span className="text-xs font-semibold text-neutral-500">Total 5 Kelas</span>
+            <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+              Khusus 5 Rombel (6-A s/d 6-E)
+            </span>
           </div>
+          <p className="text-xs text-neutral-500 mb-4">
+            Siswa hanya dapat masuk ke LMS setelah kelasnya diatur secara manual oleh Super Admin.
+          </p>
 
           <div className="space-y-3.5">
             {CANONICAL_CLASSES.map((cls) => {

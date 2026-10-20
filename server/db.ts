@@ -323,8 +323,56 @@ class DatabaseService {
     return true;
   }
 
-  public resetStudentAccessCode(userId: string, newHash: string): boolean {
-    return this.updateStudent(userId, { accessCodeHash: newHash });
+  public assignStudentClass(userId: string, targetClass: CanonicalClass): boolean {
+    return this.updateStudent(userId, { className: targetClass });
+  }
+
+  public batchAssignClass(userIds: string[], targetClass: CanonicalClass): number {
+    let count = 0;
+    const now = new Date().toISOString();
+    this.inMemoryDb.students = this.inMemoryDb.students.map((s) => {
+      if (userIds.includes(s.userId)) {
+        count++;
+        return {
+          ...s,
+          className: targetClass,
+          updatedAt: now,
+        };
+      }
+      return s;
+    });
+    if (count > 0) {
+      this.saveDatabase(this.inMemoryDb);
+    }
+    return count;
+  }
+
+  public deleteStudent(userId: string): boolean {
+    const beforeLen = this.inMemoryDb.students.length;
+    this.inMemoryDb.students = this.inMemoryDb.students.filter((s) => s.userId !== userId);
+    if (this.inMemoryDb.students.length !== beforeLen) {
+      this.saveDatabase(this.inMemoryDb);
+      return true;
+    }
+    return false;
+  }
+
+  public batchDeleteStudents(userIds: string[]): number {
+    const beforeLen = this.inMemoryDb.students.length;
+    this.inMemoryDb.students = this.inMemoryDb.students.filter((s) => !userIds.includes(s.userId));
+    const deletedCount = beforeLen - this.inMemoryDb.students.length;
+    if (deletedCount > 0) {
+      this.saveDatabase(this.inMemoryDb);
+    }
+    return deletedCount;
+  }
+
+  public resetStudentAccessCode(userId: string, newHash: string, newPlainCode?: string): boolean {
+    const updates: Partial<StudentRecord> = { accessCodeHash: newHash };
+    if (newPlainCode) {
+      updates.plainAccessCode = newPlainCode;
+    }
+    return this.updateStudent(userId, updates);
   }
 
   public getExistingStudentKeys(): Set<string> {
